@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>backtests</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="watchlist.css?v=1.0">
+</head>
+<body>
+
+
+    <!-- Верхняя панель -->
+    <div class="top-panel">
+      <h1 class="dashboard-title" style="margin-right: 1030px;">Crypto Dashboard</h1>
+    
+      <div class="button-container">
+        <button class="map-button">риск-модели</button>
+        <img src="C:\Users\PC\Documents\5.png" alt="Карта" class="map-image">
+      </div>
+      <div class = "showdelbtn"><button onclick="openTableModal()"  style="background-color: rgb(194, 192, 48); font-style: italic;">Добавить данные</button></div>
+      <div class = "showdelbtn">  <button onclick="opendeletedModal_Swing()" style="background-color: rgb(179, 115, 19); font-style: italic;">show deals log</button> </div>
+     
+    </div>
+
+   <div class="top-panel-swtich">
+      <a  href="intradays.html"><button  class="top-panel-buttons" >inraday</button></a>
+      <a  href="swings.html"><button class="top-panel-buttons" >swing</button></a>
+      <a  href="fx.html"><button class="top-panel-buttons">fx</button></a>
+    </div> 
+    
+    <div id="deletedModal_Swing" class="modal">
+      <h3>Удалённые строки</h3>
+      <div class="table-wrapper">
+        <table id="deletedTable_backs">
+          <thead>
+            <tr style="color: #000000; font-style: italic; ">
+              <th style="text-align: center;">Ticker</th>
+              <th style="text-align: center;">Link</th>
+              <th style="text-align: center;">Result</th>
+              <th style="text-align: center;">reason</th>
+              <th style="text-align: center;">size</th>
+              <th style="text-align: center;">Tf</th>
+              
+            </tr>
+          </thead>
+          <tbody id="deletedbody_backs"></tbody>
+        </table>
+      </div>
+      <button onclick="exportDeletedToXLS()" style="background-color: rgb(102, 171, 32); padding: 5px 10px;">Экспортировать в XLS</button>
+      <input type="file" id="importDeletedFile" accept=".xls,.xlsx" style="display: none;" onchange="importDeletedData()" />
+  <button onclick="document.getElementById('importDeletedFile').click()" style="background-color: rgb(14, 98, 14); font-style: italic; padding: 5px 10px;">Импортировать XLS</button>
+    <button onclick="closedeletedModal_Swing()" style="background-color: rgb(196, 52, 20); padding: 5px 10px;">Закрыть</button>
+    </div>
+  
+  
+    
+  
+    <div id="tableModal" class="modalTable" style="display: none;">
+      <h3>Добавить данные</h3>
+      <div class="table-wrapper">
+        <table id="dataTable">
+          
+
+
+          <tbody id="dataBody"></tbody>
+        </table>
+        <button onclick="addRowToModal()">Добавить строку</button>
+      </div>
+      <button onclick="closeTableModal()">Закрыть</button>
+    </div>
+
+  
+    <div id="deleteModal" class="modal">
+      <h3>Введите информацию перед удалением</h3>
+      <input id="modalResult" class = "modalResult" type="number" placeholder="Результат (число)">
+      <input id="modalLink" class = "modalResult" type="url" placeholder="Ссылка">
+      <button onclick="confirmDelete()" style = "background-color: red;">Подтвердить</button>
+      <button onclick="closeModal()" style = "background-color: red;">Отмена</button>
+    </div>
+  
+  
+    
+    <div class="side-panel closed" id="sidePanel">
+      
+      <ul>
+        <li><a href="index.html" class = "sidebtn">hub</a></li>
+        <li><a href="watchlist.html" class = "sidebtn">notions</a></li>
+        <li><a href="indexvid.html" class = "sidebtn">learning</a></li>
+        
+      </ul> 
+      <div class="button-container">
+        <button onclick="exportData()" class="sidebuttons">export links</button>
+        <input type="file" id="importFile" onchange="importData()" style="display: none;" class="sidebuttons">
+        <button onclick="document.getElementById('importFile').click()" class="sidebuttons">import links</button>
+      </div>
+    </div>
+    </div>
+  
+  
+  
+    <!-- Основная таблица -->
+<div class="table-container">
+  <table id="assetsTable">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Reason</th>
+        <th>Risk Reward</th>
+        <th>Dir</th> <!-- заменили Take на Dir -->
+        <th>Tf</th> <!-- заменили Stop на Tf -->
+        <th>comment</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <button class="btn add-btn" onclick="addRow()">+</button>
+</div>
+
+ 
+<script>
+  function importDeletedData() {
+  const fileInput = document.getElementById("importDeletedFile");
+  const file = fileInput.files[0];
+
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function (event) {
+    const data = new Uint8Array(event.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    // Очистка текущей таблицы
+    const deletedbody_backs = document.getElementById("deletedbody_backs");
+    deletedbody_backs.innerHTML = "";
+
+    // Добавление строк в таблицу
+    rows.slice(1).forEach(row => { // Пропускаем заголовок
+      const [ticker, link, result, reason, dir, tf] = row;
+
+      if (ticker && result && link) { // Проверяем обязательные поля
+        const newRow = document.createElement("tr");
+        newRow.innerHTML = `
+          <td>${ticker}</td>
+          <td><a href="${link}" target="_blank">${link}</a></td>
+          <td>${result}</td>
+          <td>${reason || ''}</td>
+          <td>${dir || ''}</td>
+          <td>${tf || ''}</td>
+          <td><button class="btn btn-removedel" onclick="removeDeletedRow(this)">del</button></td>
+        `;
+        deletedbody_backs.appendChild(newRow);
+      }
+    });
+
+    saveDeletedData(); // Сохраняем изменения
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+</script>
+
+<script>
+
+function addRowToModal(reason = "") {
+  const dataBody = document.getElementById("dataBody");
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td><input type="text" class="reasonInput" value="${reason}" ${reason ? "disabled" : ""}></td>
+    <td>
+      <button 
+        style="background-color: ${reason ? "red" : "green"}; color: white;" 
+        ${reason ? "onclick='removeReason(this)'" : "onclick='saveReason(this)'"}>${reason ? "Удалить" : "Сохранить"}</button>
+    </td>
+  `;
+  dataBody.appendChild(row);
+}
+
+// Загрузка всех доступных причин
+function loadreasonOptions_backs() {
+  const savedRows = JSON.parse(localStorage.getItem("tableRows_backs")) || [];
+  return savedRows.map(row => row.reason).filter(Boolean);
+}
+// Загрузка данных из локального хранилища и обновление таблицы
+function loadtableRows_backs() {
+  const savedRows = JSON.parse(localStorage.getItem("tableRows_backs")) || [];
+  const dataBody = document.getElementById("dataBody");
+  dataBody.innerHTML = "";
+  savedRows.forEach(rowData => {
+    addRowToModal(rowData.reason);
+  });
+}
+// Сохранение всех строк из modalTable в localStorage
+function savetableRows_backs() {
+  const rows = Array.from(document.querySelectorAll("#dataBody tr")).map(row => {
+    const reasonInput = row.querySelector(".reasonInput");
+    return {
+      reason: reasonInput ? reasonInput.value.trim() : "",
+    };
+  });
+  localStorage.setItem("tableRows_backs", JSON.stringify(rows));
+}
+function savereasonOptions_backs(reasons) {
+  localStorage.setItem("reasonOptions_backs", JSON.stringify(reasons));
+}
+
+function removeReason(button) {
+  const row = button.closest("tr");
+  const reason = row.querySelector(".reasonInput").value.trim();
+
+  // Удаляем строку из modalTable
+  row.remove();
+  savetableRows_backs();
+
+  // Удаляем reason из списка reasonOptions_backs
+  const reasons = loadreasonOptions_backs().filter(r => r !== reason);
+  savereasonOptions_backs(reasons);
+
+  // Обновляем выпадающие списки
+  updateReasonDropdowns();
+
+  savemodaltableData_backs_backs(); 
+}
+
+function updateReasonDropdowns() {
+  const reasons = loadreasonOptions_backs();
+  const selects = document.querySelectorAll("#assetsTable .reason");
+  selects.forEach(select => {
+    select.innerHTML = `<option value=>Выберите...</option>` + 
+      reasons.map(reason => `<option value="${reason}">${reason}</option>`).join("");
+  });
+
+  // Загружаем ранее выбранные значения
+  const data = JSON.parse(localStorage.getItem("assetsData_backs")) || [];
+  data.forEach((rowData, index) => {
+    const select = document.querySelectorAll("#assetsTable .reason")[index];
+    if (select && rowData.reason) {
+      select.value = rowData.reason;
+    }
+  });
+}
+
+function saveReason(button) {
+  const row = button.closest("tr");
+  const reasonInput = row.querySelector(".reasonInput");
+  const reasonValue = reasonInput.value.trim();
+
+  if (reasonValue) {
+    const reasons = loadreasonOptions_backs();
+    if (!reasons.includes(reasonValue)) {
+      reasons.push(reasonValue);
+      savereasonOptions_backs(reasons);
+      updateReasonDropdowns();
+    }
+    savetableRows_backs();
+
+    reasonInput.disabled = true;
+    button.textContent = "Удалить";
+    button.style.backgroundColor = "red";
+    button.setAttribute("onclick", "removeReason(this)");
+  } else {
+    alert("Введите значение перед сохранением!");
+  }
+  updateReasonDropdowns();
+  savemodaltableData_backs_backs();
+}
+
+function loadModalData() {
+  const savedData = JSON.parse(localStorage.getItem("modaltableData_backs_backs")) || [];
+  const dataBody = document.getElementById("dataBody");
+  dataBody.innerHTML = ""; // Очистка существующих строк
+
+  savedData.forEach(row => {
+    const newRow = document.createElement("tr");
+    newRow.innerHTML = `
+      <td><input type="text" value="${row.reason}" class="reasonInput" disabled></td>
+      <td>
+        <button style="background-color: red; color: white;" onclick="removeReason(this)">Удалить</button>
+      </td>
+    `;
+    dataBody.appendChild(newRow);
+  });
+}
+
+function savemodaltableData_backs_backs() {
+  const rows = [];
+  document.querySelectorAll("#dataBody tr").forEach(row => {
+    const reason = row.querySelector(".reasonInput").value.trim();
+    rows.push({ reason });
+  });
+  localStorage.setItem("modaltableData_backs_backs", JSON.stringify(rows));
+}
+
+window.onload = function () {
+  loadData();
+  updateReasonDropdowns(); // Обновление выпадающих списков при загрузке
+};
+
+
+</script>
+      <script>
+        function exportDeletedToXLS() {
+      // Получаем таблицу с удалёнными строками
+      const deletedTable_backs = document.getElementById("deletedTable_backs");
+    
+      // Собираем данные из таблицы
+      const data = [];
+      const rows = deletedTable_backs.querySelectorAll("tr");
+    
+      // Перебираем строки таблицы
+      rows.forEach((row, index) => {
+        const cells = Array.from(row.querySelectorAll("th, td")).map(cell => cell.textContent);
+        if (cells.length > 0) {
+          data.push(cells); // Добавляем строку в массив
+        }
+      });
+    
+      // Создаём Excel-объект с данными
+      const worksheet = XLSX.utils.aoa_to_sheet(data); // Преобразуем массив в формат листа Excel
+      const workbook = XLSX.utils.book_new(); // Создаём новую книгу
+      XLSX.utils.book_append_sheet(workbook, worksheet, "DeletedData"); // Добавляем лист
+    
+      // Сохраняем файл
+      XLSX.writeFile(workbook, "DeletedData.xlsx");
+    }
+      </script>
+      <script>
+        function loadData() {
+  const data = JSON.parse(localStorage.getItem("assetsData_backs")) || [];
+  data.forEach(addRowFromData);
+}
+
+
+function addRowFromData(data) {
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td><input type="text" class="asset" value="${data.asset}" oninput="saveData()"></td>
+    <td>
+      <select class="reason" onchange="saveReasonSelection(this)">
+        <option value="">Выберите...</option>
+      </select>
+    </td>
+    <td><input type="text" class="risk_reward" value="${data.risk_reward}" oninput="saveData()"></td>
+    <td>
+      <select class="dir" onchange="saveData()">
+        <option value="">Выберите...</option>
+        <option value="0,25" ${data.dir === "0,25" ? "selected" : ""}>0,25</option>
+        <option value="0,5" ${data.dir === "0,5" ? "selected" : ""}>0,5</option>
+        <option value="1" ${data.dir === "1" ? "selected" : ""}>1</option>
+      </select>
+    </td>
+    <td>
+      <select class="tf" onchange="saveData()">
+        <option value="">Выберите...</option>
+        <option value="asia" ${data.tf === "asia" ? "selected" : ""}>asia</option>
+        <option value="ldn" ${data.tf === "ldn" ? "selected" : ""}>ldn</option>
+        <option value="ny" ${data.tf === "ny" ? "selected" : ""}>ny</option>
+        <option value="lunch" ${data.tf === "lunch" ? "selected" : ""}>lunch</option>
+        <option value="ny pm" ${data.tf === "ny pm" ? "selected" : ""}>ny pm</option>
+      </select>
+    </td>
+    <td><input type="text" class="percentage" value="${data.percentage}" oninput="saveData()"></td>
+    <td><button class="btn btn-remove" onclick="showModal(this)">Удалить</button></td>
+  `;
+  document.getElementById("tableBody").appendChild(row);
+  updateReasonDropdowns(); // Обновляем выпадающий список с сохранёнными значениями
+}
+// Сохранение выбранного значения из выпадающего списка
+function saveReasonSelection(select) {
+  const rowIndex = Array.from(document.querySelectorAll("#assetsTable .reason")).indexOf(select);
+  const data = JSON.parse(localStorage.getItem("assetsData_backs")) || [];
+  if (data[rowIndex]) {
+    data[rowIndex].reason = select.value;
+  }
+  localStorage.setItem("assetsData_backs", JSON.stringify(data));
+}
+    
+        // Функция для сохранения данных в Local Storage
+        // Функция для сохранения данных в Local Storage
+        function saveData() {
+  const rows = document.querySelectorAll("#tableBody tr");
+  const data = Array.from(rows).map(row => ({
+    asset: row.querySelector(".asset").value,
+    reason: row.querySelector(".reason").value,
+    risk_reward: row.querySelector(".risk_reward").value,
+    dir: row.querySelector(".dir").value,
+    tf: row.querySelector(".tf").value,
+    percentage: row.querySelector(".percentage").value,
+  }));
+  localStorage.setItem("assetsData_backs", JSON.stringify(data));
+  console.log("Данные сохранены:", data);
+}
+        // Функция для добавления новой пустой строки
+        function addRow() {
+          addRowFromData({ asset: "", entryPoint: "", risk_reward: "", dir: "", tf: "", percentage: "" });
+          saveData();
+        }
+    
+        // Функция для удаления строки
+        function removeRow(button) {
+ button.parentElement.parentElement.remove();
+  saveData();
+}
+    
+        // Загружаем данные при загрузке страницы
+        window.onload = loadData;
+      </script>
+      <script>
+        let currentInput;
+    
+        
+        function toggleSidePanel() {
+      const panel = document.getElementById('sidePanel');
+      panel.classList.toggle('closed');
+    }
+    document.querySelector('.side-panel').addEventListener('mouseover', () => {
+        document.querySelector('main').style.marginLeft = '200px';
+    });
+    
+    document.querySelector('.side-panel').addEventListener('mouseout', () => {
+        document.querySelector('main').style.marginLeft = '50px';
+    });
+    
+        
+      </script>
+      
+      <script>
+        <table id="deletedTable_backs" class="hidden">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Ссылка</th>
+            <th>Результат</th>
+            <th>Причина входа</th>
+          </tr>
+        </thead>
+        <tbody id="deletedbody_backs"></tbody>
+      </table>
+        
+    
+        // Загружаем данные при загрузке страницы
+       
+      </script>
+    <script>
+      // Загрузка данных из localStorage
+      function loadtableData_backs() {
+        const data = JSON.parse(localStorage.getItem("tableData_backs")) || [];
+        const dataBody = document.getElementById("dataBody");
+        dataBody.innerHTML = "";
+        data.forEach(row => {
+          addRowToTable(row.ticker, row.condition, row.reason);
+        });
+      }
+  
+      // Сохранение данных в localStorage
+      function savetableData_backs() {
+        const rows = document.querySelectorAll("#dataBody tr");
+        const data = Array.from(rows).map(row => ({
+          ticker: row.querySelector(".ticker").value,
+          condition: row.querySelector(".condition").value,
+          reason: row.querySelector(".reason").value
+          
+        }));
+        localStorage.setItem("tableData_backs", JSON.stringify(data));
+      }
+  
+      // Добавить строку в таблицу
+      function addRowToTable(ticker = "", condition = "", reason = "") {
+        
+
+      }
+  
+      // Удалить строку
+      function deleteRow(button) {
+        button.parentElement.parentElement.remove();
+        savetableData_backs();
+      }
+  
+      // Добавить новую пустую строку
+      function addNewRow() {
+        addRowToTable();
+        savetableData_backs();
+      }
+  
+      function openTableModal() {
+  loadModalData();
+  document.getElementById("tableModal").style.display = "block";
+}
+      // Закрыть модальное окно
+      function closeTableModal() {
+        document.getElementById("tableModal").style.display = "none";
+        updateReasonDropdowns();
+      }
+  
+      // Загрузка данных при загрузке страницы
+      window.onload = loadtableData_backs;
+    </script>
+    <script>
+
+
+      // Экспорт данных
+function exportData() {
+  // Загружаем данные из Local Storage
+  const data = JSON.parse(localStorage.getItem('assetsData_backs')) || [];
+  
+  // Преобразуем данные в JSON-строку
+  const json = JSON.stringify(data, null, 2);
+  
+  // Создаем Blob с правильным типом
+  const blob = new Blob([json], { type: 'application/json' });
+  
+  // Создаем URL для скачивания
+  const url = URL.createObjectURL(blob);
+  
+  // Создаем временную ссылку для скачивания
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'assetsData_backs.json';
+  
+  // Симулируем клик по ссылке
+  a.click();
+  
+  // Освобождаем память
+  URL.revokeObjectURL(url);
+
+  
+}
+    
+      // Импорт данных
+      function importData() {
+        const fileInput = document.getElementById('importFile');
+        const file = fileInput.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(event) {
+            const importedData = event.target.result;
+            localStorage.setItem('assetsData_backs', importedData);
+            location.reload(); // Обновление страницы для отображения данных
+          };
+          reader.readAsText(file);
+        }
+      }
+    
+      let rowToDelete = null;
+    
+    
+    
+      function confirmDelete() {
+  console.log("Удаление строки начато...");
+  console.log("rowToDelete:", rowToDelete);
+
+
+  const result = document.getElementById('modalResult').value;
+  const link = document.getElementById('modalLink').value;
+
+  const ticker = rowToDelete.querySelector('.asset').value;
+  const reasonElement = rowToDelete.querySelector('.reason');
+  const reason = reasonElement ? reasonElement.value : "N/A";
+
+  const risk = rowToDelete.querySelector('.percentage').value;
+  const dir = rowToDelete.querySelector('.dir').value;
+  const tf = rowToDelete.querySelector('.tf').value;
+  const formattedResult = `${result} (${risk}%)`; 
+
+  console.log("Данные для удаления:", { ticker, reason, risk, dir, tf });
+
+  const deletedbody_backs = document.getElementById('deletedbody_backs');
+  const deletedRow = document.createElement('tr');
+  deletedRow.innerHTML = `
+    <td>${ticker}</td>
+    <td><a href="${link}" target="_blank" class="hrefdelete">link</a></td>
+    <td>${formattedResult}</td>
+    <td>${reason}</td>
+    <td>${dir}</td>
+    <td>${tf}</td>
+    <td><button class="btn btn-removedel" onclick="removeDeletedRow(this)">del</button></td>
+  `;
+  deletedbody_backs.appendChild(deletedRow);
+
+  saveDeletedData();
+  rowToDelete.remove();
+  saveData();
+  closeModal();
+}
+        
+    
+function closeModal() {
+  document.getElementById('deleteModal').style.display = 'none';
+  window.rowToDelete = null;
+}
+      
+    // Сохранение удалённых данных
+    function saveDeletedData() {
+    const rows = document.querySelectorAll("#deletedbody_backs tr");
+    const data = Array.from(rows).map(row => ({
+        ticker: row.cells[0].textContent,
+        link: row.cells[1].querySelector('a').href,
+        result: row.cells[2].textContent,
+        reason: row.cells[3].textContent,
+        dir: row.cells[4].textContent,
+        tf: row.cells[5].textContent
+    }));
+    localStorage.setItem("deletedData_Swing", JSON.stringify(data));
+}
+
+    
+function loadDeletedData() {
+    const data = JSON.parse(localStorage.getItem('deletedData_Swing')) || [];
+    const deletedbody_backs = document.getElementById('deletedbody_backs');
+    deletedbody_backs.innerHTML = ''; // Очищаем содержимое перед загрузкой
+    data.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.ticker}</td>
+            <td><a href="${item.link}" target="_blank">${item.link}</a></td>
+            <td>${item.result}</td>
+            <td>${item.reason}</td>
+            <td>${item.dir}</td>
+            <td>${item.tf}</td>
+            <td><button class="btn btn-removedel" onclick="removeDeletedRow(this)">del</button></td>
+        `;
+        deletedbody_backs.appendChild(row);
+    });
+}
+    function toggledeletedTable_backs() {
+      const table = document.getElementById('deletedTable_backs');
+      table.classList.toggle('hidden'); // Переключение видимости таблицы
+    }
+    function showModal(button) {
+          rowToDelete = button.parentElement.parentElement;
+          document.getElementById('deleteModal').style.display = 'block';
+        }
+       
+    
+  
+    window.onload = function() {
+          loadDeletedData();
+           loadData();
+        };
+    
+    
+        function opendeletedModal_Swing() {
+      const modal = document.getElementById('deletedModal_Swing');
+      modal.style.display = 'block';
+      loadDeletedData(); // Загружаем данные в модальное окно
+    }
+    
+    function closedeletedModal_Swing() {
+      const modal = document.getElementById('deletedModal_Swing');
+      modal.style.display = 'none';
+    }
+    
+    function removeDeletedRow(button) {
+  button.parentElement.parentElement.remove();
+  saveDeletedData(); // Сохраняем изменения в локальном хранилище
+}
+    
+    
+    </script>
+    <script>
+      function loadDeletedDataFromAPI() {
+    fetch('/api/deleted_rows')
+        .then(response => response.json())
+        .then(data => {
+            const deletedbody_backs = document.getElementById('deletedbody_backs');
+            deletedbody_backs.innerHTML = ''; // Очищаем таблицу перед добавлением
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.ticker}</td>
+                    <td><a href="${row.link}" target="_blank">${row.link}</a></td>
+                    <td>${row.result}</td>
+                    <td>${row.reason}</td>
+                    <td>${row.dir}</td>
+                    <td>${row.tf}</td>
+                    <td><button class="btn btn-removedel" onclick="deleteDeletedRow(${row.id})">del</button></td>
+                `;
+                deletedbody_backs.appendChild(tr);
+            });
+        });
+}
+    </script>
+
+
+
+<!-- отправка всех данных в BD MYSQL-->
+ <script>
+  // Функция для отправки данных на сервер
+function sendDataToServer() {
+  const assetsData_backs = JSON.parse(localStorage.getItem("assetsData_backs")) || [];
+  const deletedData_Swing = JSON.parse(localStorage.getItem("deletedData_Swing")) || [];
+
+  fetch('/api/uploadData', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ assetsData_backs, deletedData_Swing }),
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('Data uploaded successfully', data);
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+  });
+}
+
+
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+
+// Подключение к базе данных MongoDB
+mongoose.connect('mongodb://localhost:27017/mydatabase', { useNewUrlParser: true, useUnifiedTopology: true });
+
+const app = express();
+const port = 3000;
+
+app.use(bodyParser.json());
+
+// Схема и модель для данных
+const dataSchema = new mongoose.Schema({
+  ticker: String,
+  link: String,
+  result: String,
+  reason: String,
+  dir: String,
+  tf: String,
+});
+
+const AssetData = mongoose.model('AssetData', dataSchema);
+
+// Маршрут для загрузки данных
+app.post('/api/uploadData', async (req, res) => {
+  const { assetsData_backs, deletedData_Swing } = req.body;
+
+  // Сохранение данных в базу
+  try {
+    // Очистка коллекции перед добавлением новых данных (если нужно)
+    await AssetData.deleteMany({});
+
+    // Преобразуем каждый элемент в коллекцию
+    const assets = assetsData_backs.map(item => new AssetData(item));
+    await AssetData.insertMany(assets);
+
+    res.status(200).json({ message: 'Data successfully saved to the database' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error saving data', error });
+  }
+});
+
+// Запуск сервера
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
+});
+ </script>
+</body>
+</html>  
